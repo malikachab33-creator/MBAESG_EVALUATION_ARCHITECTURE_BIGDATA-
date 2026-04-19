@@ -444,12 +444,12 @@ else:
 
 | Tâche | Responsable |
 |---|---|
-| Architecture Bronze / Silver | Binôme |
-| Couche Gold et requêtes analytiques | Binôme |
-| Analyse 1 et 2 (Streamlit) | Membre 1 |
-| Analyse 3 et 4 (Streamlit) | Membre 2 |
-| Analyse 5 et debug jointures | Binôme |
-| Documentation README | Binôme |
+| Architecture Bronze / Silver | ACHAB Malik |
+| Couche Gold et requêtes analytiques | NZONDA NDE Bosco Junior |
+| Analyse 1 et 4 (Streamlit) | NZONDA NDE Bosco Junior |
+| Analyse 2 et 3 (Streamlit) | ACHAB Malik  |
+| Analyse 5 et debug jointures | ACHAB Malik  |
+| Documentation README | ACHAB Malik  |
 
 ---
 
