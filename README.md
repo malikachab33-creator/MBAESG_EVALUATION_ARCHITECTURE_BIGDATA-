@@ -1,102 +1,135 @@
-# MBAESG_EVALUATION_ARCHITECTURE_BIGDATA-
+<div align="center">
 
+# 🔍 LinkedIn Job Market Analyzer
 
-# Projet LinkedIn — Analyse du marché de l'emploi avec Snowflake & Streamlit
+### Snowflake · Streamlit · Architecture Medallion
 
-## Description
-
-Ce projet analyse un dataset d'offres d'emploi LinkedIn en utilisant une architecture **Medallion** (Bronze / Silver / Gold) sur Snowflake, avec des visualisations interactives via **Streamlit in Snowflake**.
-
----
-
-## Architecture
-
-```
-S3 (snowflake-lab-bucket)
-        │
-        ▼
-   BRONZE (données brutes)
-   ├── JOB_POSTINGS     (CSV)
-   ├── COMPANIES        (JSON → ARRAY)
-   ├── JOB_SKILLS       (CSV)
-   ├── BENEFITS         (CSV)
-   ├── EMPLOYEE_COUNTS  (CSV)
-   ├── JOB_INDUSTRIES   (JSON → ARRAY)
-   ├── COMPANY_SPECIALITIES (JSON → ARRAY)
-   └── COMPANY_INDUSTRIES   (JSON → ARRAY)
-        │
-        ▼
-   SILVER (données nettoyées et typées)
-   ├── JOB_POSTINGS     (timestamps, floats, booléens, company_id extrait)
-   ├── COMPANIES        (FLATTEN + cast NUMBER::STRING)
-   ├── JOB_SKILLS
-   ├── BENEFITS
-   ├── EMPLOYEE_COUNTS
-   ├── JOB_INDUSTRIES   (FLATTEN)
-   ├── COMPANY_SPECIALITIES (FLATTEN)
-   └── COMPANY_INDUSTRIES   (FLATTEN + cast NUMBER::STRING)
-        │
-        ▼
-   GOLD (tables analytiques)
-   ├── DIM_JOBS         (vue)
-   ├── DIM_COMPANIES    (vue)
-   ├── FACT_JOBS        (table avec job_score)
-   ├── TOP_SKILLS_BY_INDUSTRY
-   └── FACT_BENEFITS
-```
+*Projet réalisé dans le cadre d'un cours de Data Engineering*
 
 ---
 
-## Fichiers du projet
+**ACHAB Malik** &nbsp;·&nbsp; **NZONDA NDE Bosco Junior**
+
+</div>
+
+---
+
+## 💡 C'est quoi ce projet ?
+
+On a pris un dataset massif d'offres d'emploi LinkedIn et on l'a transformé en pipeline de données complet sur Snowflake — du fichier brut S3 jusqu'aux visualisations interactives — en suivant l'architecture **Medallion** (Bronze → Silver → Gold).
+
+> *En clair : des données sales, des erreurs de types, des JSON mal structurés, des jointures qui ne matchent pas... et on a tout résolu.*
+
+---
+
+## 👥 Équipe
+
+| | Nom | Prénom | Rôle principal |
+|--|-----|--------|----------------|
+| 🧑‍💻 | ACHAB | Malik | Pipeline SQL, Analyses 2 & 3, Debug jointures, Documentation |
+| 🧑‍💻 | NZONDA NDE | Bosco Junior | Analyses 1 & 4, Reconstruction Silver |
+
+---
+
+## 🗂️ Structure du dépôt
 
 ```
-projet-linkedin-snowflake/
-├── sql/
-│   └── linkedin_sql_final_v2.sql    ← SQL complet Bronze → Silver → Gold
-├── streamlit/
-│   └── streamlit_linkedin_final_v3.py  ← Les 5 analyses Streamlit
-└── README.md
+📁 projet-linkedin-snowflake/
+│
+├── 📄 README.md
+│
+├── 📁 sql/
+│   └── linkedin_sql_final_v2.sql       ← Pipeline complet Bronze → Silver → Gold
+│
+└── 📁 streamlit/
+    └── streamlit_linkedin_final_v3.py  ← Les 5 analyses interactives
 ```
 
 ---
 
-## Commandes SQL utilisées — avec explications
+## 🏗️ Architecture Medallion
 
-### 1. Initialisation
+```
+         ☁️  AWS S3  (snowflake-lab-bucket)
+                │
+        ┌───────┴────────┐
+        │   INGESTION     │  COPY INTO + FILE FORMAT
+        └───────┬────────┘
+                │
+        ┌───────▼────────────────────────────────────────┐
+        │  🥉  BRONZE  —  Données brutes                  │
+        │  ├── JOB_POSTINGS.csv                           │
+        │  ├── COMPANIES.json          ← tableau JSON     │
+        │  ├── JOB_SKILLS.csv                             │
+        │  ├── BENEFITS.csv                               │
+        │  ├── EMPLOYEE_COUNTS.csv                        │
+        │  ├── JOB_INDUSTRIES.json     ← tableau JSON     │
+        │  ├── COMPANY_SPECIALITIES.json                  │
+        │  └── COMPANY_INDUSTRIES.json ← tableau JSON     │
+        └───────┬────────────────────────────────────────┘
+                │  TRY_CAST · TRY_TO_NUMBER · TO_TIMESTAMP
+                │  STRIP_OUTER_ARRAY · LATERAL FLATTEN
+        ┌───────▼────────────────────────────────────────┐
+        │  🥈  SILVER  —  Données nettoyées et typées     │
+        │  ├── JOB_POSTINGS  (company_id extrait, dates)  │
+        │  ├── COMPANIES     (NUMBER::STRING pour l'ID)   │
+        │  ├── JOB_INDUSTRIES                             │
+        │  ├── COMPANY_INDUSTRIES  (FLATTEN + cast)       │
+        │  └── ...                                        │
+        └───────┬────────────────────────────────────────┘
+                │  JOIN · GROUP BY · ROW_NUMBER · COALESCE
+        ┌───────▼────────────────────────────────────────┐
+        │  🥇  GOLD  —  Prêt pour l'analyse              │
+        │  ├── DIM_JOBS          (vue)                    │
+        │  ├── DIM_COMPANIES     (vue)                    │
+        │  ├── FACT_JOBS         (avec job_score)         │
+        │  ├── TOP_SKILLS_BY_INDUSTRY                     │
+        │  └── FACT_BENEFITS                              │
+        └───────┬────────────────────────────────────────┘
+                │
+        ┌───────▼────────┐
+        │   STREAMLIT     │  5 analyses interactives
+        └────────────────┘
+```
+
+---
+
+## 🧱 Commandes SQL — avec explications
+
+### Étape 0 · Initialisation
 
 ```sql
 CREATE DATABASE IF NOT EXISTS LINKEDIN;
-USE DATABASE LINKEDIN;
 CREATE OR REPLACE SCHEMA LINKEDIN.BRONZE;
 CREATE OR REPLACE SCHEMA LINKEDIN.SILVER;
 CREATE OR REPLACE SCHEMA LINKEDIN.GOLD;
-```
 
-**Explication :** Création de la base et des 3 schémas correspondant aux 3 couches de l'architecture Medallion.
-
-```sql
 CREATE OR REPLACE STAGE LINKEDIN_STAGE
     URL = 's3://snowflake-lab-bucket/';
 
 CREATE OR REPLACE FILE FORMAT CSV_FORMAT
-    TYPE = CSV
+    TYPE                         = CSV
     FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    SKIP_HEADER = 1
-    NULL_IF = ('NULL', 'null', '', 'N/A')
-    EMPTY_FIELD_AS_NULL = TRUE;
+    SKIP_HEADER                  = 1
+    NULL_IF                      = ('NULL', 'null', '', 'N/A')
+    EMPTY_FIELD_AS_NULL          = TRUE;
 ```
 
-**Explication :** Le stage pointe vers le bucket S3 public. `FIELD_OPTIONALLY_ENCLOSED_BY` gère les champs entre guillemets. `NULL_IF` convertit les chaînes vides et 'NULL' en vraies valeurs NULL.
+> `NULL_IF` transforme les chaînes vides et `'NULL'` en vraies valeurs `NULL` dès l'ingestion — ça évite de les gérer à chaque requête ensuite.
 
 ---
 
-### 2. Couche Bronze — Ingestion brute
+### Étape 1 · Bronze — Ingestion brute
 
-#### Fichiers CSV
+#### Fichiers CSV — tout en STRING
 
 ```sql
 CREATE OR REPLACE TABLE LINKEDIN.BRONZE.JOB_POSTINGS (
-    job_id STRING, company_name STRING, title STRING, ...
+    job_id       STRING,
+    company_name STRING,   -- contient en réalité un company_id numérique !
+    title        STRING,
+    max_salary   STRING,   -- sera casté en FLOAT en Silver
+    ...
 );
 
 COPY INTO LINKEDIN.BRONZE.JOB_POSTINGS
@@ -104,9 +137,9 @@ FROM @LINKEDIN_STAGE/job_postings.csv
 FILE_FORMAT = CSV_FORMAT;
 ```
 
-**Explication :** Toutes les colonnes sont en STRING pour éviter les erreurs de type au chargement. Le typage se fait en Silver avec `TRY_CAST`.
+> Toutes les colonnes sont en `STRING` au Bronze. Si on caste directement et qu'une valeur est invalide, le `COPY INTO` échoue sur toute la ligne. Le typage se fait proprement en Silver avec `TRY_CAST`.
 
-#### Fichiers JSON (ARRAY)
+#### Fichiers JSON — STRIP_OUTER_ARRAY = TRUE
 
 ```sql
 CREATE OR REPLACE TABLE LINKEDIN.BRONZE.COMPANIES (DATA VARIANT);
@@ -117,57 +150,65 @@ FILE_FORMAT = (TYPE = 'JSON' STRIP_OUTER_ARRAY = TRUE)
 FORCE = TRUE;
 ```
 
-**Explication :** `STRIP_OUTER_ARRAY = TRUE` est essentiel — le fichier JSON est un tableau `[{}, {}, ...]`. Sans ce paramètre, tout le tableau est chargé en une seule ligne VARIANT (IS_ARRAY = TRUE) et le parsing est impossible. Avec ce paramètre, chaque objet devient une ligne (IS_OBJECT = TRUE). `FORCE = TRUE` force le rechargement même si le fichier a déjà été chargé.
+> **Point critique.** Le fichier JSON est un tableau `[{...}, {...}]`. Sans `STRIP_OUTER_ARRAY = TRUE`, Snowflake charge tout en **une seule ligne** (`IS_ARRAY = TRUE`) et `DATA:company_id` retourne NULL partout. Avec ce paramètre, chaque objet devient une ligne (`IS_OBJECT = TRUE`). `FORCE = TRUE` force le rechargement même si le fichier avait déjà été chargé.
 
 ---
 
-### 3. Couche Silver — Nettoyage et typage
+### Étape 2 · Silver — Nettoyage et typage
 
-#### JOB_POSTINGS
+#### JOB_POSTINGS — les transformations clés
 
 ```sql
 CREATE OR REPLACE TABLE LINKEDIN.SILVER.JOB_POSTINGS AS
 SELECT
-    TRIM(job_id)                                            AS job_id,
-    TRY_TO_NUMBER(TRIM(company_name))                       AS company_id,
-    TRY_CAST(max_salary AS FLOAT)                           AS max_salary,
-    TO_TIMESTAMP(TRY_CAST(original_listed_time AS NUMBER) / 1000)
-                                                            AS original_listed_time,
-    IFF(UPPER(TRIM(remote_allowed)) = 'TRUE', TRUE, FALSE)  AS remote_allowed,
+    TRIM(job_id)                                                AS job_id,
+
+    -- company_name contient un ID numérique (ex: 54844.0), pas un nom
+    TRY_TO_NUMBER(TRIM(company_name))                           AS company_id,
+
+    -- timestamps en millisecondes → diviser par 1000
+    TO_TIMESTAMP(TRY_CAST(listed_time AS NUMBER) / 1000)        AS listed_time,
+
+    -- booléens stockés comme chaînes ('TRUE', 'true', 'True'...)
+    IFF(UPPER(TRIM(remote_allowed)) = 'TRUE', TRUE, FALSE)      AS remote_allowed,
+
+    -- salaires STRING → FLOAT (TRY_CAST retourne NULL si invalide)
+    TRY_CAST(max_salary AS FLOAT)                               AS max_salary,
+
+    -- tranche salariale calculée
     CASE
         WHEN TRY_CAST(max_salary AS FLOAT) IS NULL  THEN 'unknown'
         WHEN TRY_CAST(max_salary AS FLOAT) < 40000  THEN 'low'
         WHEN TRY_CAST(max_salary AS FLOAT) <= 90000 THEN 'medium'
-        ELSE 'high'
-    END AS salary_range,
-    ARRAY_SIZE(SPLIT(skills_desc, ','))                     AS num_skills
+        ELSE                                              'high'
+    END                                                         AS salary_range,
+
+    -- nombre de competences listees
+    ARRAY_SIZE(SPLIT(skills_desc, ','))                         AS num_skills
+
 FROM LINKEDIN.BRONZE.JOB_POSTINGS
 WHERE TRIM(job_id) IS NOT NULL AND TRIM(job_id) != '';
 ```
 
-**Explication :**
-- `TRY_TO_NUMBER(company_name)` : la colonne `company_name` du CSV contient en réalité un company_id numérique (ex: `54844.0`). On le convertit proprement.
-- `TO_TIMESTAMP(... / 1000)` : les timestamps sont en millisecondes (epoch ms), on divise par 1000 pour obtenir des secondes.
-- `IFF(UPPER(...) = 'TRUE', ...)` : les booléens sont stockés comme chaînes, `UPPER()` gère toutes les variantes de casse.
-- `TRY_CAST` / `TRY_TO_NUMBER` : ne lève pas d'erreur en cas de valeur non convertible, retourne NULL.
-
-#### COMPANIES (JSON ARRAY)
+#### COMPANIES — le double cast NUMBER::STRING
 
 ```sql
 CREATE OR REPLACE TABLE LINKEDIN.SILVER.COMPANIES AS
 SELECT
-    DATA:company_id::NUMBER::STRING     AS company_id,
+    DATA:company_id::NUMBER::STRING     AS company_id,  -- NUMBER d'abord, STRING ensuite
     DATA:name::STRING                   AS company_name,
     DATA:company_size::NUMBER::STRING   AS company_size,
-    ...
+    DATA:country::STRING                AS country,
+    DATA:city::STRING                   AS city,
+    DATA:url::STRING                    AS url
 FROM LINKEDIN.BRONZE.COMPANIES
 WHERE IS_OBJECT(DATA)
   AND DATA:company_id IS NOT NULL;
 ```
 
-**Explication :** `DATA:company_id::NUMBER::STRING` — le JSON stocke `company_id` comme nombre entier (`1009`, sans guillemets). Il faut d'abord caster en NUMBER pour lire la valeur, puis en STRING pour la jointure avec `JOB_POSTINGS.company_id`.
+> Dans le JSON, `company_id` est un entier brut (`1009` sans guillemets). Le cast `::NUMBER::STRING` force la lecture comme nombre puis la conversion en chaîne propre — ce qui garantit que `'1009'` dans COMPANIES matche `'1009'` dans JOB_POSTINGS.
 
-#### COMPANY_INDUSTRIES (JSON imbriqué dans ARRAY)
+#### COMPANY_INDUSTRIES — LATERAL FLATTEN
 
 ```sql
 CREATE OR REPLACE TABLE LINKEDIN.SILVER.COMPANY_INDUSTRIES AS
@@ -175,17 +216,17 @@ SELECT
     f.value:company_id::NUMBER::STRING  AS company_id,
     f.value:industry::STRING            AS industry_id
 FROM LINKEDIN.BRONZE.COMPANY_INDUSTRIES,
-LATERAL FLATTEN(input => DATA) f
+LATERAL FLATTEN(input => DATA) f        -- dérouler le tableau JSON en lignes
 WHERE f.value:company_id IS NOT NULL;
 ```
 
-**Explication :** `LATERAL FLATTEN` déroulète un tableau JSON en lignes. Nécessaire quand le fichier JSON est un tableau d'objets chargé en une seule ligne VARIANT.
+> `LATERAL FLATTEN` transforme chaque élément d'un tableau JSON en une ligne distincte. Indispensable quand le fichier entier est stocké en une seule ligne VARIANT.
 
 ---
 
-### 4. Couche Gold — Analyses
+### Étape 3 · Gold — Analyses
 
-#### FACT_JOBS avec job_score
+#### FACT_JOBS avec job_score composite
 
 ```sql
 CREATE OR REPLACE TABLE LINKEDIN.GOLD.FACT_JOBS AS
@@ -194,22 +235,20 @@ SELECT
     c.company_name,
     c.company_size,
     (
-        COALESCE(jp.max_salary, 0) * 0.4
-        + COALESCE(jp.views, 0)    * 0.3
-        + COALESCE(jp.applies, 0)  * 0.2
-        + jp.num_skills * 50
-        + IFF(jp.remote_allowed, 1000, 0)
+        COALESCE(jp.max_salary, 0) * 0.4   -- salaire      : 40%
+        + COALESCE(jp.views, 0)    * 0.3   -- visibilite   : 30%
+        + COALESCE(jp.applies, 0)  * 0.2   -- attractivite : 20%
+        + jp.num_skills * 50               -- richesse en competences
+        + IFF(jp.remote_allowed, 1000, 0)  -- bonus remote
     ) AS job_score
 FROM LINKEDIN.SILVER.JOB_POSTINGS jp
 LEFT JOIN LINKEDIN.SILVER.COMPANIES c
     ON jp.company_id::STRING = c.company_id;
 ```
 
-**Explication :** Score composite pondéré combinant salaire (40%), vues (30%), candidatures (20%), compétences et télétravail. `COALESCE` remplace les NULL par 0 pour éviter que le score soit NULL si une valeur manque.
-
 ---
 
-### 5. Requêtes analytiques
+### Étape 4 · Requetes analytiques
 
 #### Analyse 1 — Top 10 postes par industrie
 
@@ -220,7 +259,7 @@ WITH ranked AS (
         jp.title,
         COUNT(*) AS nb_offres,
         ROW_NUMBER() OVER (
-            PARTITION BY ji.industry_id
+            PARTITION BY ji.industry_id  -- classement independant par industrie
             ORDER BY COUNT(*) DESC
         ) AS rn
     FROM LINKEDIN.SILVER.JOB_POSTINGS jp
@@ -229,28 +268,32 @@ WITH ranked AS (
     GROUP BY ji.industry_id, jp.title
 )
 SELECT industry_id, title, nb_offres
-FROM ranked WHERE rn <= 10
+FROM ranked
+WHERE rn <= 10  -- top 10 de chaque industrie
 ORDER BY industry_id, nb_offres DESC;
 ```
-
-**Explication :** `ROW_NUMBER() OVER (PARTITION BY industry_id)` crée un rang indépendant par industrie. `WHERE rn <= 10` filtre le top 10 de chaque industrie. La CTE (WITH) sépare le calcul du filtrage pour plus de lisibilité.
 
 #### Analyse 2 — Salaires par industrie
 
 ```sql
 WITH salaires AS (
     SELECT
-        ji.industry_id, jp.title,
+        ji.industry_id,
+        jp.title,
         ROUND(AVG(NULLIF(jp.med_salary, 0)), 0) AS avg_med_salary,
+        -- NULLIF exclut les 0 de la moyenne
         ROW_NUMBER() OVER (
             PARTITION BY ji.industry_id
             ORDER BY AVG(NULLIF(jp.med_salary, 0)) DESC NULLS LAST
         ) AS rn
-    ...
+    FROM LINKEDIN.SILVER.JOB_POSTINGS jp
+    JOIN LINKEDIN.SILVER.JOB_INDUSTRIES ji ON jp.job_id = ji.job_id
+    WHERE jp.med_salary IS NOT NULL AND jp.med_salary > 0
+    GROUP BY ji.industry_id, jp.title
 )
+SELECT industry_id, title, avg_med_salary
+FROM salaires WHERE rn <= 10;
 ```
-
-**Explication :** `NULLIF(med_salary, 0)` exclut les valeurs à 0 de la moyenne (sinon elles biaiseraient le calcul). `NULLS LAST` place les industries sans salaire en fin de classement.
 
 #### Analyse 3 — Taille d'entreprise
 
@@ -258,33 +301,43 @@ WITH salaires AS (
 SELECT
     CASE c.company_size
         WHEN '1' THEN '1 - Individuel'
+        WHEN '2' THEN '2 - 2 a 10 emp.'
+        WHEN '3' THEN '3 - 11 a 50 emp.'
+        WHEN '4' THEN '4 - 51 a 200 emp.'
+        WHEN '5' THEN '5 - 201 a 500 emp.'
+        WHEN '6' THEN '6 - 501 a 1000 emp.'
         WHEN '7' THEN '7 - 1K a 5K emp.'
-        ...
-        ELSE 'Non renseigne'
+        WHEN '8' THEN '8 - 5K a 10K emp.'
+        WHEN '9' THEN '9 - Plus de 10K emp.'
+        ELSE          'Non renseigne'
     END AS taille_entreprise,
     COUNT(jp.job_id) AS nb_offres,
+    -- pourcentage calcule en une seule requete grace a la fenetre globale
     ROUND(COUNT(jp.job_id) * 100.0 / SUM(COUNT(jp.job_id)) OVER (), 2) AS pourcentage
 FROM LINKEDIN.SILVER.JOB_POSTINGS jp
 LEFT JOIN LINKEDIN.SILVER.COMPANIES c
     ON jp.company_id::STRING = c.company_id
-GROUP BY taille_entreprise;
+GROUP BY taille_entreprise
+ORDER BY nb_offres DESC;
 ```
 
-**Explication :** `SUM(COUNT(*)) OVER ()` est une fonction de fenêtre sans partition — elle calcule le total global pour obtenir le pourcentage en une seule requête. La jointure `jp.company_id::STRING = c.company_id` est la clé : `company_id` dans `JOB_POSTINGS` est un NUMBER, dans `COMPANIES` c'est un STRING issu du cast `::NUMBER::STRING`.
-
-#### Analyse 4 — Secteur d'activité
+#### Analyse 4 — Secteur d'activite
 
 ```sql
 SELECT
     COALESCE(NULLIF(TRIM(ci.industry_id), ''), 'Secteur inconnu') AS secteur,
-    COUNT(DISTINCT jp.job_id) AS nb_offres
+    COUNT(DISTINCT jp.job_id)               AS nb_offres,
+    COUNT(DISTINCT c.company_name)          AS nb_entreprises,
+    ROUND(AVG(NULLIF(jp.med_salary, 0)), 0) AS salaire_median_moyen
 FROM LINKEDIN.SILVER.JOB_POSTINGS jp
-LEFT JOIN LINKEDIN.SILVER.COMPANIES c ON jp.company_id::STRING = c.company_id
-LEFT JOIN LINKEDIN.SILVER.COMPANY_INDUSTRIES ci ON c.company_id = ci.company_id
-GROUP BY secteur ORDER BY nb_offres DESC LIMIT 25;
+LEFT JOIN LINKEDIN.SILVER.COMPANIES c
+    ON jp.company_id::STRING = c.company_id
+LEFT JOIN LINKEDIN.SILVER.COMPANY_INDUSTRIES ci
+    ON c.company_id = ci.company_id
+GROUP BY secteur
+ORDER BY nb_offres DESC
+LIMIT 25;
 ```
-
-**Explication :** Double `LEFT JOIN` pour traverser JOB_POSTINGS → COMPANIES → COMPANY_INDUSTRIES. `COALESCE(NULLIF(TRIM(...), ''), 'Secteur inconnu')` gère les chaînes vides et NULL en une seule expression. `COUNT(DISTINCT)` évite le comptage en double.
 
 #### Analyse 5 — Type d'emploi
 
@@ -292,170 +345,119 @@ GROUP BY secteur ORDER BY nb_offres DESC LIMIT 25;
 SELECT
     COALESCE(NULLIF(TRIM(formatted_work_type), ''), 'Non specifie') AS type_emploi,
     COUNT(*) AS nb_offres,
-    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS pourcentage
+    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS pourcentage,
+    ROUND(AVG(NULLIF(med_salary, 0)), 0)   AS salaire_median,
+    SUM(IFF(remote_allowed = TRUE, 1, 0))  AS nb_remote
 FROM LINKEDIN.SILVER.JOB_POSTINGS
-GROUP BY type_emploi ORDER BY nb_offres DESC;
-```
-
-**Explication :** Même pattern que l'analyse 3 pour le pourcentage. Pas de jointure nécessaire car `formatted_work_type` est directement dans `JOB_POSTINGS`.
-
----
-
-## Problèmes rencontrés et solutions apportées
-
-### Problème 1 — SILVER.COMPANIES vide (0 lignes)
-
-**Cause :** Le fichier `companies.json` est un tableau JSON `[{}, {}]`. Sans `STRIP_OUTER_ARRAY = TRUE`, Snowflake charge tout le tableau en une seule ligne VARIANT avec `IS_ARRAY = TRUE`. Le filtre `WHERE IS_OBJECT(DATA)` retournait donc 0 résultats.
-
-**Solution :**
-```sql
-COPY INTO LINKEDIN.BRONZE.COMPANIES
-FROM @LINKEDIN_STAGE/companies.json
-FILE_FORMAT = (TYPE = 'JSON' STRIP_OUTER_ARRAY = TRUE)
-FORCE = TRUE;
-```
-`STRIP_OUTER_ARRAY = TRUE` découpe le tableau en autant de lignes que d'objets. `FORCE = TRUE` force le rechargement si le fichier avait déjà été chargé.
-
----
-
-### Problème 2 — company_id ne matchait pas (nb_match = 0)
-
-**Cause :** Dans le JSON, `company_id` est un NUMBER entier (`1009`, sans guillemets). Le cast `DATA:company_id::STRING` produisait parfois des formats différents. De plus, `company_name` dans `JOB_POSTINGS` contenait en réalité le `company_id` numérique (ex: `54844.0`).
-
-**Solution :**
-```sql
--- Dans SILVER.COMPANIES :
-DATA:company_id::NUMBER::STRING AS company_id  -- caster NUMBER puis STRING
-
--- Dans SILVER.JOB_POSTINGS :
-TRY_TO_NUMBER(TRIM(company_name)) AS company_id  -- extraire l'ID numérique
-
--- Jointure :
-ON jp.company_id::STRING = c.company_id
+GROUP BY type_emploi
+ORDER BY nb_offres DESC;
 ```
 
 ---
 
-### Problème 3 — COMPANY_INDUSTRIES vide après reconstruction
+## 🐛 Problèmes rencontrés & solutions
 
-**Cause :** Le fichier `company_industries.json` est aussi un tableau JSON mais chargé différemment — il nécessitait `LATERAL FLATTEN` car chaque ligne Bronze contenait le tableau entier.
+### 🔴 Problème 1 — SILVER.COMPANIES vide (0 lignes)
 
-**Solution :**
-```sql
-CREATE OR REPLACE TABLE LINKEDIN.SILVER.COMPANY_INDUSTRIES AS
-SELECT
-    f.value:company_id::NUMBER::STRING AS company_id,
-    f.value:industry::STRING           AS industry_id
-FROM LINKEDIN.BRONZE.COMPANY_INDUSTRIES,
-LATERAL FLATTEN(input => DATA) f
-WHERE f.value:company_id IS NOT NULL;
-```
+| | |
+|--|--|
+| **Symptôme** | `SELECT COUNT(*) FROM SILVER.COMPANIES` retourne `0` |
+| **Cause** | `companies.json` est un tableau JSON `[{}, {}]`. Sans `STRIP_OUTER_ARRAY = TRUE`, Snowflake charge tout en 1 ligne avec `IS_ARRAY = TRUE`. Le filtre `WHERE IS_OBJECT(DATA)` retourne alors 0 résultats. |
+| **Solution** | `FILE_FORMAT = (TYPE = 'JSON' STRIP_OUTER_ARRAY = TRUE) FORCE = TRUE` |
 
 ---
 
-### Problème 4 — SyntaxError dans Streamlit
+### 🔴 Problème 2 — Jointure company_id = 0 match
 
-**Cause :** Des apostrophes dans les labels Python (`taille d'entreprise`, `1 · Individuel`) à l'intérieur de chaînes délimitées par des apostrophes provoquaient `SyntaxError: unterminated string literal`.
-
-**Solution :** Supprimer tous les apostrophes et caractères spéciaux des labels Python :
-```python
-# Avant (erreur)
-WHEN '1' THEN '1 · Individuel'
-
-# Après (correct)
-WHEN '1' THEN '1 - Individuel'
-```
+| | |
+|--|--|
+| **Symptôme** | `JOIN ON company_name = company_name` retourne `0` lignes |
+| **Cause** | `company_name` dans JOB_POSTINGS contient un ID numerique (`54844.0`), pas un nom. Dans COMPANIES, `company_id` est un entier JSON sans guillemets. Les types ne matchaient pas. |
+| **Solution** | `DATA:company_id::NUMBER::STRING` dans COMPANIES + `jp.company_id::STRING = c.company_id` en jointure |
 
 ---
 
-### Problème 5 — SQL compilation error : invalid identifier 'JP.COMPANY_ID'
+### 🔴 Problème 3 — COMPANY_INDUSTRIES vide
 
-**Cause :** La table `SILVER.JOB_POSTINGS` avait été créée sans la colonne `company_id` — l'ancienne version gardait le champ `company_name` tel quel.
-
-**Solution :** Recréer `SILVER.JOB_POSTINGS` en ajoutant explicitement la colonne :
-```sql
-TRY_TO_NUMBER(TRIM(company_name)) AS company_id
-```
-
----
-
-### Problème 6 — Timestamps illisibles
-
-**Cause :** Les colonnes `listed_time`, `expiry`, `original_listed_time` contiennent des epochs en millisecondes (ex: `1701234567000`).
-
-**Solution :**
-```sql
-TO_TIMESTAMP(TRY_CAST(listed_time AS NUMBER) / 1000) AS listed_time
-```
-`TRY_CAST` évite une erreur si la valeur est non numérique, `/1000` convertit ms en secondes.
+| | |
+|--|--|
+| **Symptôme** | `SELECT COUNT(*) FROM SILVER.COMPANY_INDUSTRIES` retourne `0` |
+| **Cause** | Le fichier JSON etait charge en 1 seule ligne VARIANT contenant le tableau entier |
+| **Solution** | `LATERAL FLATTEN(input => DATA) f` + `f.value:company_id::NUMBER::STRING` |
 
 ---
 
-## Code Streamlit — Les 5 analyses
+### 🟡 Problème 4 — SyntaxError Streamlit
 
-Le code complet se trouve dans `streamlit/streamlit_linkedin_final_v3.py`.
+| | |
+|--|--|
+| **Symptôme** | `SyntaxError: unterminated string literal (detected at line 69)` |
+| **Cause** | Apostrophes dans les labels Python a l'interieur de strings delimitees par des apostrophes |
+| **Solution** | Supprimer tous les apostrophes : `d'entreprise` → `d entreprise` |
 
-### Structure générale
+---
+
+### 🟡 Problème 5 — invalid identifier 'JP.COMPANY_ID'
+
+| | |
+|--|--|
+| **Symptôme** | `SQL compilation error: invalid identifier 'JP.COMPANY_ID'` |
+| **Cause** | `SILVER.JOB_POSTINGS` avait ete creee sans la colonne `company_id` |
+| **Solution** | Recreer la table avec `TRY_TO_NUMBER(TRIM(company_name)) AS company_id` |
+
+---
+
+### 🟡 Problème 6 — Timestamps illisibles
+
+| | |
+|--|--|
+| **Symptôme** | `listed_time = 1701234567000` au lieu d'une vraie date |
+| **Cause** | Les timestamps sont en millisecondes (epoch ms) |
+| **Solution** | `TO_TIMESTAMP(TRY_CAST(listed_time AS NUMBER) / 1000)` |
+
+---
+
+## 📊 Visualisations Streamlit
+
+| # | Analyse | Graphique | Interactivite |
+|---|---------|-----------|---------------|
+| 1 | Top postes par industrie | Bar chart horizontal | Selectbox industrie |
+| 2 | Meilleurs salaires | Bar chart + fourchette min-max | Selectbox industrie |
+| 3 | Taille d'entreprise | Donut + Bar chart | — |
+| 4 | Secteur d'activite | Bar chart (couleur = salaire) | Slider top N |
+| 5 | Type d'emploi | Donut + Bar chart dynamique | Selectbox metrique |
+
+### Pattern commun a toutes les analyses
 
 ```python
-import streamlit as st
-import altair as alt
 from snowflake.snowpark.context import get_active_session
+session = get_active_session()  # connexion automatique dans Snowflake SiS
 
-session = get_active_session()  # connexion automatique dans Snowflake
-
-tab1, tab2, tab3, tab4, tab5 = st.tabs([...])
-```
-
-`get_active_session()` fournit la session Snowflake automatiquement dans l'environnement Streamlit in Snowflake — aucun credential nécessaire.
-
-### Pattern commun à toutes les analyses
-
-```python
-@st.cache_data
+@st.cache_data          # mise en cache pour eviter les rechargements Snowflake
 def load_data():
-    df = session.sql("SELECT ...").to_pandas()
-    return df if not df.empty else None
+    return session.sql("SELECT ...").to_pandas()
 
 df = load_data()
-if df is None:
-    st.error("Aucune donnee disponible.")
-else:
-    # visualisation Altair
-    chart = alt.Chart(df).mark_bar().encode(...)
-    st.altair_chart(chart, use_container_width=True)
+chart = alt.Chart(df).mark_bar().encode(...)
+st.altair_chart(chart, use_container_width=True)
 ```
 
-`@st.cache_data` met en cache les résultats pour éviter de recharger Snowflake à chaque interaction utilisateur.
+---
 
-### Visualisations utilisées
+## 🛠️ Stack technique
 
-| Analyse | Type de graphique | Librairie |
-|---|---|---|
-| Top postes / industrie | Bar chart horizontal | Altair |
-| Meilleurs salaires | Bar chart + Error bar (fourchette min-max) | Altair |
-| Taille entreprise | Donut chart + Bar chart | Altair |
-| Secteur d'activité | Bar chart horizontal avec couleur = salaire | Altair |
-| Type d'emploi | Donut chart + Bar chart dynamique | Altair |
+| Outil | Usage |
+|-------|-------|
+| **Snowflake** | Data warehouse, SQL, Streamlit in Snowflake |
+| **AWS S3** | Stockage des fichiers sources |
+| **Python / Streamlit** | Visualisations interactives |
+| **Altair** | Graphiques declaratifs |
+| **Architecture Medallion** | Bronze / Silver / Gold |
 
 ---
 
-## Répartition des tâches
+<div align="center">
 
-| Tâche | Responsable |
-|---|---|
-| Architecture Bronze / Silver | ACHAB Malik |
-| Couche Gold et requêtes analytiques | NZONDA NDE Bosco Junior |
-| Analyse 1 et 4 (Streamlit) | NZONDA NDE Bosco Junior |
-| Analyse 2 et 3 (Streamlit) | ACHAB Malik  |
-| Analyse 5 et debug jointures | ACHAB Malik  |
-| Documentation README | ACHAB Malik  |
+*Projet Data Engineering — ACHAB Malik & NZONDA NDE Bosco Junior*
 
----
-
-## Technologies utilisées
-
-- **Snowflake** — Data warehouse, SQL, Streamlit in Snowflake
-- **Python** — Streamlit, Pandas, Altair
-- **AWS S3** — Stockage des fichiers sources
-- **Architecture Medallion** — Bronze / Silver / Gold
+</div>
