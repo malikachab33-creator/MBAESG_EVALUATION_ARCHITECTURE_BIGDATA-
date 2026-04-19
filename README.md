@@ -458,6 +458,6 @@ st.altair_chart(chart, use_container_width=True)
 
 <div align="center">
 
-*Projet Data Engineering — ACHAB Malik & NZONDA NDE Bosco Junior*
+*Projet Architecture Big Data — ACHAB Malik & NZONDA NDE Bosco Junior*
 
 </div>
